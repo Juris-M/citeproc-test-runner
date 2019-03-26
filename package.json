@@ -1,0 +1,32 @@
+{
+    "name": "citeproc-runner",
+    "version": "1.0.0",
+    "description": "CSL test runner with style support",
+    "main": "runtests.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "bin": {
+        "cslrun": "./runtests.js"
+    },
+    "dependencies": {
+        "chai": "^4.2.0",
+        "chokidar": "^2.1.2",
+        "citeproc-juris-modules": "^1.0.1",
+        "citeproc-locales": "^1.0.2",
+        "cross-clear": "^1.0.0",
+        "getopts": "^2.2.4",
+        "mocha": "^6.0.2",
+        "mocha-spectrum-reporter": "^1.0.3",
+        "normalize-newline": "^3.0.0",
+        "nyanplusreporter": "^0.10.4",
+        "tmp": "0.0.33",
+        "yaml": "^1.4.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "dfdf"
+    },
+    "author": "Frank Bennett <biercenator@gmail.com>",
+    "license": "MIT"
+}
