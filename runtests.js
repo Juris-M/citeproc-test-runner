@@ -2,28 +2,33 @@
 
 const fs = require("fs");
 const path = require("path");
-const yaml = require("yaml");
-const getopts = require("getopts");
 const { spawn } = require("child_process");
 const tmp = require("tmp");
 const clear = require("cross-clear");
 const chokidar = require("chokidar");
 const normalizeNewline = require("normalize-newline");
-const homeDir = require('os').homedir();
+
+const config = require("./lib/configs.js");
+const reporters = require("./lib/reporters.js");
+const sections = require("./lib/sections.js");
+const sources = require("./lib/sources.js");
+const options = require("./lib/options.js").options;
+const usage = require("./lib/options.js").usage;
+const errors = require("./lib/errors.js");
+const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 
 var ksTimeout;
-
 var skipNames = {};
-
 var TRAVIS = process.env.TRAVIS;
 
+/*
+ * Console
+ */
 process.stdin.setRawMode(true);
 process.stdin.resume();
-
 // The console needs to run in binary mode, to give the fancy reporters
 // control over the terminal
 //process.stdin.setEncoding( 'utf8' );
-
 process.stdin.on('data', function( key ){
     // ctrl-c ( end of text )
     if ( key.toString("hex") === "03" ) {
@@ -32,256 +37,9 @@ process.stdin.on('data', function( key ){
     }
 });
 
-/* Configuration */
-
-/*
- * Config priority:
- * - User homeDir config
- * - Current directory config
- *
- * Should allow paths to be set as relative to homeDir or absolute,
- * but internally use always absolute for the config paths
- *
+/* 
+ * Functions
  */
-
-const scriptDir = path.dirname(require.main.filename);
-
-const defaultConfig =
-      "path:\n"
-      + "    local: fixtures/local\n"
-      + "    std: fixtures/std/processor-tests/humans\n"
-      + "    src: ../src\n"
-      + "    locale: ../locale\n"
-      + "    styles: fixtures/local/styles\n"
-      + "    modules: ../juris-modules\n"
-      + "    styletests: styletests\n"
-      + "    jing: ../jing/jing-20131210.jar\n"
-      + "    cslschema: ../csl-schemata/csl/csl.rnc\n"
-      + "    cslmschema: ../csl-schemata/csl-m/csl-mlz.rnc";
-
-var configFile = process.argv[1].replace(/.js\r?$/, ".yaml");
-var baseName = "." + path.basename(configFile);
-var dirName = path.dirname(configFile);
-configFile = path.join(dirName, baseName);
-console.log(configFile)
-if (!fs.existsSync(configFile)) {
-    fs.writeFileSync(configFile, defaultConfig);
-}
-var config = yaml.parse(fs.readFileSync(configFile).toString());
-
-
-
-config.path.localAbs = path.join(scriptDir, config.path.local);
-config.path.stdAbs = path.join(scriptDir, config.path.std);
-config.path.srcAbs = path.join(scriptDir, config.path.src);
-
-const reporters = {
-    "landing": "landing",
-    "spec": "spec",
-    "spectrum": "node_modules/mocha-spectrum-reporter/index",
-    "nyan": "node_modules/nyanplusreporter/src/nyanPlus",
-    "dot": "dot",
-    "min": "min",
-    "progress": "progress"
-};
-
-function errorHandler(err) {
-    console.log("\nError: " + err.message + "\n");
-    process.exit(1);
-}
-
-function errorHandlerNonFatal(err) {
-    console.log("\nError: " + err.message + "\n");
-}
-
-const sourceFiles = [
-    "load",
-    "print",
-    "xmljson",
-    "xmldom",
-    "system",
-    "sort",
-    "util_disambig",
-    "util_nodes",
-    "util_dateparser",
-    "build",
-    "util_static_locator",
-    "util_processor",
-    "util_citationlabel",
-    "api_control",
-    "queue",
-    "state",
-    "api_cite",
-    "api_bibliography",
-    "util_integration",
-    "api_update",
-    "util_locale",
-    "util_locale_sniff",
-    "node_bibliography",
-    "node_choose",
-    "node_citation",
-    "node_comment",
-    "node_date",
-    "node_datepart",
-    "node_elseif",
-    "node_else",
-    "node_etal",
-    "node_group",
-    "node_if",
-    "node_conditions",
-    "node_condition",
-    "util_conditions",
-    "node_info",
-    "node_institution",
-    "node_institutionpart",
-    "node_key",
-    "node_label",
-    "node_layout",
-    "node_macro",
-    "node_alternative",
-    "node_alternativetext",
-    "util_names_output",
-    "util_names_tests",
-    "util_names_truncate",
-    "util_names_divide",
-    "util_names_join",
-    "util_names_common",
-    "util_names_constraints",
-    "util_names_disambig",
-    "util_names_etalconfig",
-    "util_names_etal",
-    "util_names_render",
-    "util_publishers",
-    "util_label",
-    "node_name",
-    "node_namepart",
-    "node_names",
-    "node_number",
-    "node_sort",
-    "node_substitute",
-    "node_text",
-    "node_intext",
-    "attributes",
-    "stack",
-    "util_parallel",
-    "util",
-    "util_transform",
-    "obj_token",
-    "obj_ambigconfig",
-    "obj_blob",
-    "obj_number",
-    "util_datenode",
-    "util_date",
-    "util_names",
-    "util_dates",
-    "util_sort",
-    "util_substitute",
-    "util_number",
-    "util_page",
-    "util_flipflop",
-    "formatters",
-    "formats",
-    "registry",
-    "disambig_names",
-    "disambig_citations",
-    "disambig_cites",
-    "util_modules",
-    "util_name_particles"
-];
-
-/* Utilities */
-
-const sections = {
-    ABBREVIATIONS: {
-        required: false,
-        type: "json"
-    },
-    BIBENTRIES: {
-        required: false,
-        type: "json"
-    },
-    BIBSECTION: {
-        required: false,
-        type: "json"
-    },
-    "CITATION-ITEMS": {
-        required: false,
-        type: "json"
-    },
-    CITATIONS: {
-        required: false,
-        type: "json"
-    },
-    CSL: {
-        required: true,
-        type: "xml"
-    },
-    INPUT: {
-        required: true,
-        type: "json"
-    },
-    INPUT2: {
-        required: false,
-        type: "json"
-    },
-    LANGPARAMS: {
-        required: false,
-        type: "json"
-    },
-    MODE: {
-        required: true,
-        type: "string"
-    },
-    MULTIAFFIX: {
-        required: false,
-        type: "json"
-    },
-    OPTIONS: {
-        required: false,
-        type: "json"
-    },
-    OPTIONZ: {
-        required: false,
-        type: "json"
-    },
-    RESULT: {
-        required: true,
-        type: "string"
-    },
-    NAME: {
-        required: true,
-        type: "string"
-    },
-    PATH: {
-        required: true,
-        type: "string"
-    }
-};
-
-const optParams = {
-    alias: {
-        s: "single",
-        g: "group",
-        a: "all",
-        l: "list",
-        c: "cranky",
-        w: "watch",
-        S: "style",
-        k: "key-query",
-        C: "compose-tests",
-        b: "black-and-white",
-        r: "reporter",
-        h: "help"
-    },
-    string: ["s", "g", "S", "w", "C", "r"],
-    boolean: ["a", "l", "c", "k", "b", "h"],
-    unknown: option => {
-        throw Error("Unknown option \"" +option + "\"");
-    }
-};
-
-const options = getopts(process.argv.slice(2), optParams);
-
 function Parser(options, tn, fpth) {
     this.options = options;
     this.fpth = fpth;
@@ -301,7 +59,6 @@ function Parser(options, tn, fpth) {
                     this.obj[key] = JSON.parse(this.obj[key]);
                 } catch (err) {
                     console.log(this.fpth);
-                    console.log(this.obj[key])
                     throw new Error("JSON parse fail for tag \"" + key + "\"");
                 }
             }
@@ -332,14 +89,6 @@ function Parser(options, tn, fpth) {
             if ("undefined" === typeof this.obj[key]) {
                 console.log(this.fpth);
                 throw new Error("Missing required tag \"" + key + "\"");
-            }
-        }
-        if (this.obj.CSL.trim().slice(-4) === ".csl") {
-            try {
-                this.obj.CSL = fs.readFileSync(path.join(scriptDir, config.path.styles, this.obj.CSL.trim())).toString();
-            } catch (err) {
-                console.log("Warning: style \"" + this.obj.CSL.trim() + "\" not found, skipping test");
-                this.obj = false;
             }
         }
         return this.obj;
@@ -438,51 +187,6 @@ function Stripper(fn, noStrip) {
     };
 }
 
-/* Options */
-
-const usage = "Usage: " + path.basename(process.argv[1])
-      + "Usage: runtests.js <-s testName|-g groupName|-a|-l> [-S styleName|-w cslFilePath|-C cslJsonFilePath]\n"
-      + "  -s testName, --single=testName\n"
-      + "      Run a single local or standard test fixture.\n"
-      + "  -g groupName, --group=groupName\n"
-      + "      Run a group of tests with the specified prefix.\n"
-      + "  -a, --all\n"
-      + "      Run all tests.\n"
-      + "  Option for use with -s, -g, or -a:\n"
-      + "      -c, --cranky\n"
-      + "          Validate CSL in selected fixtures\n"
-      + "      -b, --black-and-white\n"
-      + "          Disable color output\n"
-      + "      -r, --reporter\n"
-      + "          Set the report style. Default is \"landing.\"\n"
-      + "          Valid options are: spec, spectrum, nyan, dot, min\n"
-      + "          and progress.\n"
-      + "  Options for style development with -s, -g, or -a:\n"
-      + "      -S, --style\n"
-      + "          Style name (without spaces). Without -C, requires -w.\n"
-      + "      -w, --watch\n"
-      + "          Path to CSL source file watch for changes, relative to\n"
-      + "          repository root. Without -C, requires -S.\n"
-      + "      Option for use with -s, -g, or -a with -S and -w:\n"
-      + "          -k, --key-query\n"
-      + "              When tests fail, stop processing and ask whether to\n"
-      + "              adopt the processor output as the RESULT. Useful for\n"
-      + "              rapidly back-fitting tests to existing styles.\n"
-      + "      Option for use with -S:\n"
-      + "          -C, --compose-tests\n"
-      + "              Path to CSL JSON file containing item data, relative\n"
-      + "              to repository root. Requires also -S. Creates draft\n"
-      + "              test fixtures in -S style test directory. Existing\n"
-      + "              files will be overwritten: be sure to rename files\n"
-      + "              after generating draft fixtures.\n"
-      + "  Option for use on its own, or with -S  \n"
-      + "          -l, --list\n"
-      + "              List available groups and styles.";
-
-// First things first
-if (options.watch) {
-    console.log("Watching: " + options.watch);
-}
 function checkSanity() {
     if (options.h) {
         console.log(usage);
@@ -499,6 +203,11 @@ function checkSanity() {
         options.r = "spec";
     } else {
         options.r = "landing";
+    }
+    if (config.mode === "styleMode") {
+        if (!options.S) {
+            throw new Error("Running in styleMode. The -S option is required, with either -w or -C. Add -h for help.");
+        }
     }
     if (!options.C) {
         if (["s", "g", "a", "l"].filter(o => options[o]).length > 1) {
@@ -522,18 +231,17 @@ function checkSanity() {
 
 function setLocalPathToStyleTestPath() {
     var styleTestsPth = null;
+    if (!fs.existsSync(config.path.styletests)) {
+        throw new Error("The configured style tests directory must exist: " + config.path.styletests);
+    }
     try {
-        var testDirPth = path.join(scriptDir, config.path.styletests);
-        if (!fs.existsSync(testDirPth)) {
-            fs.mkdirSync(testDirPth);
-        }
-        styleTestsPth = path.join(testDirPth, options.S);
+        styleTestsPth = path.join(config.path.styletests, options.S);
         if (!fs.existsSync(styleTestsPth)) {
             fs.mkdirSync(styleTestsPth);
         }
         config.path.local = path.join(config.path.styletests, options.S);
-        config.path.localAbs = styleTestsPth;
     } catch (err) {
+        throw err;
         throw new Error("Unable to create style tests directory: " + styleTestsPth);
     }
 }
@@ -545,7 +253,7 @@ function setWatchFiles(options) {
     }
     for (var i in arr) {
         if (!path.isAbsolute(arr[i])) {
-            arr[i] = path.join(scriptDir, "..", arr[i]);
+            arr[i] = path.join(config.path.cwd, arr[i]);
         }
         if (!fs.existsSync(arr[i])) {
             throw new Error("CSL file or directory to be watched does not exist: " + arr[i]);
@@ -567,8 +275,8 @@ function checkSingle() {
     if (fn.split("_").length !== 2) {
         throw new Error("Single test fixture must be specified as [group]_[name]");
     }
-    var lpth = path.join(config.path.localAbs, fn);
-    var spth = path.join(config.path.stdAbs, fn);
+    var lpth = path.join(config.path.local, fn);
+    var spth = path.join(config.path.std, fn);
     if (!fs.existsSync(lpth) && (options.style || !fs.existsSync(spth))) {
         console.log("Looking for " + lpth);
         console.log("Looking for " + spth);
@@ -588,10 +296,10 @@ function checkSingle() {
 function checkGroup() {
     var fail = true;
     var rex = new RegExp("^" + options.group + "_.*\.txt\\r?$");
-    for (var line of fs.readdirSync(config.path.localAbs)) {
+    for (var line of fs.readdirSync(config.path.local)) {
         if (rex.test(line)) {
             fail = false;
-            var lpth = path.join(config.path.localAbs, line);
+            var lpth = path.join(config.path.local, line);
             var tn = line.replace(/.txt\r?$/, "");
             if (!skipNames[tn]) {
                 config.testData[tn] = parseFixture(tn, lpth);
@@ -599,10 +307,10 @@ function checkGroup() {
         }
     }
     if (!options.style) {
-        for (var line of fs.readdirSync(config.path.stdAbs)) {
+        for (var line of fs.readdirSync(config.path.std)) {
             if (rex.test(line)) {
                 fail = false;
-                var spth = path.join(config.path.stdAbs, line);
+                var spth = path.join(config.path.std, line);
                 var tn = line.replace(/.txt\r?$/, "");
                 if (!skipNames[tn]) {
                     if (fs.existsSync(spth)) {
@@ -621,9 +329,9 @@ function checkGroup() {
 
 function checkAll() {
     var rex = new RegExp("^.*_.*\.txt\\r?$");
-    for (var line of fs.readdirSync(config.path.localAbs)) {
+    for (var line of fs.readdirSync(config.path.local)) {
         if (rex.test(line)) {
-            var lpth = path.join(config.path.localAbs, line);
+            var lpth = path.join(config.path.local, line);
             var tn = line.replace(/.txt\r?$/, "");
             if (!skipNames[tn]) {
                 config.testData[tn] = parseFixture(tn, lpth);
@@ -633,9 +341,9 @@ function checkAll() {
         }
     }
     if (!options.style) {
-        for (var line of fs.readdirSync(config.path.stdAbs)) {
+        for (var line of fs.readdirSync(config.path.std)) {
             if (rex.test(line)) {
-                var spth = path.join(config.path.stdAbs, line);
+                var spth = path.join(config.path.std, line);
                 var tn = line.replace(/.txt\r?$/, "");
                 if (!skipNames[tn]) {
                     if (fs.existsSync(spth)) {
@@ -652,7 +360,7 @@ function checkAll() {
 
 function setGroupList() {
     var rex = new RegExp("^([^_]+)_.*\.txt\\r?$");
-    for (var line of fs.readdirSync(config.path.localAbs)) {
+    for (var line of fs.readdirSync(config.path.local)) {
         if (rex.test(line)) {
             var m = rex.exec(line);
             if (!config.testData[m[1]]) {
@@ -661,7 +369,7 @@ function setGroupList() {
             config.testData[m[1]].push(line);
         }
     }
-    for (var line of fs.readdirSync(config.path.stdAbs)) {
+    for (var line of fs.readdirSync(config.path.std)) {
         if (rex.test(line)) {
             var m = rex.exec(line);
             if (!config.testData[m[1]]) {
@@ -688,46 +396,31 @@ function fetchTestData() {
             checkAll();
         }
     } catch (err) {
-        errorHandler(err);
+        errors.errorHandler(err);
     }
 }
-
-try {
-    checkSanity();
-    if (options.style) {
-        setLocalPathToStyleTestPath(options.style);
-    }
-    if (options.watch) {
-        setWatchFiles(options);
-    }
-    if (options.list) {
-        setGroupList();
-    }
-} catch (err) {
-    errorHandler(err);
-}
-
-
-/* Operations */
 
 function Bundle(noStrip) {
+    if (!config.path.src) {
+        return;
+    }
     // The markup of the code is weird, so we do weird things to strip
     // comments.
     // The noStrip option is not yet used, but will dump the processor
     // with comments and skipped blocks intact when set to a value.
     var ret = "";
-    for (var fn of sourceFiles) {
-        var txt = fs.readFileSync(path.join(config.path.srcAbs, fn + ".js")).toString();
+    for (var fn of sources) {
+        var txt = fs.readFileSync(path.join(config.path.src, fn + ".js")).toString();
         var stripper = new Stripper(fn, noStrip);
         for (var line of txt.split(/(?:\r\n|\n)/)) {
             stripper.checkLine(line);
         }
         ret += stripper.dumpArr() + "\n";
     }
-    var license = fs.readFileSync(path.join(scriptDir, "..", "LICENSE")).toString().trim();
+    var license = fs.readFileSync(path.join(config.path.src, "..", "LICENSE")).toString().trim();
     license = "/*\n" + license + "\n*/\n";
-    fs.writeFileSync(path.join(scriptDir, "..", "citeproc.js"), license + ret);
-    fs.writeFileSync(path.join(scriptDir, "..", "citeproc_commonjs.js"), license + ret + "\nmodule.exports = CSL");
+    fs.writeFileSync(path.join(config.path.src, "..", "citeproc.js"), license + ret);
+    fs.writeFileSync(path.join(config.path.src, "..", "citeproc_commonjs.js"), license + ret + "\nmodule.exports = CSL");
 }
 
 function runJingAsync(validationCount, validationGoal, schema, test) {
@@ -740,13 +433,13 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
             [
                 "-client",
                 "-jar",
-                path.join(scriptDir, config.path.jing),
+                config.path.jing,
                 "-c",
-                path.join(scriptDir, schema),
+                schema,
                 tmpobj.name
             ],
             {
-                cwd: path.join(scriptDir, "..")
+                cwd: path.join(config.path.scriptdir, "..")
             });
         jing.stderr.on('data', (data) => {
             reject(data.toString());
@@ -777,7 +470,7 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
                 console.log("\nValidation failure for " + test.NAME);
                 if (!options.watch) {
                     validationCount--;
-                    fs.writeFileSync(path.join(scriptDir, "..", ".cslValidationPos"), "" + validationCount);
+                    fs.writeFileSync(path.join(config.path.configdir, ".cslValidationPos"), "" + validationCount);
                     process.exit(0);
                 }
                 resolve();
@@ -798,13 +491,14 @@ async function runValidationsAsync() {
         console.log("Validating CSL in " + validationGoal + " fixtures.");
     }
     if (!options.w && !options.l && !options.C) {
-        if (options.a && fs.existsSync(path.join(scriptDir, "..", ".cslValidationPos"))) {
-            startPos = fs.readFileSync(path.join(scriptDir, "..", ".cslValidationPos")).toString();
+        if (options.a && fs.existsSync(path.join(config.path.configdir, ".cslValidationPos"))) {
+            startPos = fs.readFileSync(path.join(config.path.configdir, ".cslValidationPos")).toString();
             startPos = parseInt(startPos, 10);
         } else {
-            fs.writeFileSync(path.join(scriptDir, "..", ".cslValidationPos"), "0");
+            fs.writeFileSync(path.join(config.path.configdir, ".cslValidationPos"), "0");
         }
     }
+    
     for (var key in config.testData) {
         if (startPos > validationCount) {
             process.stdout.write(".");
@@ -858,7 +552,11 @@ function runFixturesAsync() {
         if (options.k) {
             args.push("--bail");
         }
-        var mocha = spawn("mocha", args, {cwd: path.join(scriptDir, ".."), shell: process.platform == 'win32'});
+        args.push(path.join(config.path.fixturedir, "fixtures.js"));
+        var mocha = spawn("mocha", args, {
+            cwd: config.path.configdir,
+            shell: process.platform == 'win32'
+        });
         mocha.stdout.on('data', (data) => {
             var lines = data.toString();
             process.stdout.write(lines);
@@ -874,13 +572,13 @@ function runFixturesAsync() {
                             var test = config.testData[fn];
                             
                             if (key == "y" || key == "Y") {
-                                var sys = new Sys(test);
+                                var sys = new Sys(config, test, []);
                                 var result = sys.run();
                                 var input = JSON.stringify(test.INPUT, null, 2);
-                                var txt = fs.readFileSync(path.join(scriptDir, "templateTXT.txt")).toString();
+                                var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
                                 txt = txt.replace("%%INPUT_DATA%%", input);
                                 txt = txt.replace("%%RESULT%%", result)
-                                fs.writeFileSync(path.join(scriptDir, config.path.styletests, options.S, fn + ".txt"), txt);
+                                fs.writeFileSync(path.join(config.path.styletests, options.S, fn + ".txt"), txt);
                                 // Should this be promisified?
                                 bundleValidateTest();
                                 resolve();
@@ -912,15 +610,16 @@ function runFixturesAsync() {
 }
 
 function buildTests() {
-    var fixtures = fs.readFileSync(path.join(scriptDir, "templateJS.js")).toString();
+    var fixtures = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateJS.js")).toString();
     var testData = Object.keys(config.testData).map(k => config.testData[k]).filter(o => o);
-    fixtures = fixtures.replace("%%RUNPREP_PATH%%", JSON.stringify(path.join(scriptDir, "testlib.js")));
+    fixtures = fixtures.replace("%%CONFIG%%", JSON.stringify(config, null, 2));
+    fixtures = fixtures.replace("%%RUNPREP_PATH%%", JSON.stringify(path.join(config.path.scriptdir, "lib", "sys.js")));
     fixtures = fixtures.replace("%%TEST_DATA%%", JSON.stringify(testData, null, 2));
-    if (!fs.existsSync(path.join(scriptDir, "..", "test"))) {
-        fs.mkdirSync(path.join(scriptDir, "..", "test"));
-    }
     fixtures = normalizeNewline(fixtures);
-    fs.writeFileSync(path.join(scriptDir, "..", "test", "fixtures.js"), fixtures);
+    if (!fs.existsSync(config.path.fixturedir)) {
+        fs.mkdir(config.path.fixturedir);
+    }
+    fs.writeFileSync(path.join(config.path.fixturedir, "fixtures.js"), fixtures);
 }
 
 async function bundleValidateTest(skipBundle) {
@@ -937,13 +636,13 @@ async function bundleValidateTest(skipBundle) {
             clear();
             fetchTestData();
             buildTests();
-            await runValidationsAsync().catch(err => errorHandlerNonFatal(err));
+            await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
             var watcher = chokidar.watch(options.watch[0]);
             watcher.on("change", (event, filename) => {
                 clear();
                 fetchTestData();
                 buildTests();
-                runValidationsAsync().catch(err => errorHandlerNonFatal(err));
+                runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
             });
             for (var pth of options.watch.slice(1)) {
                 watcher.add(pth);
@@ -951,7 +650,7 @@ async function bundleValidateTest(skipBundle) {
         } else {
             fetchTestData();
             buildTests();
-            await runValidationsAsync().catch(err => errorHandlerNonFatal(err));
+            await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
         }
     } else {
         fetchTestData();
@@ -960,33 +659,57 @@ async function bundleValidateTest(skipBundle) {
     }
 }
 
+/*
+ * Do stuff
+ */
+
+if (options.watch) {
+    console.log("Watching: " + options.watch);
+}
+
+try {
+    checkSanity();
+    if (options.style) {
+        setLocalPathToStyleTestPath(options.style);
+    }
+    if (options.watch) {
+        setWatchFiles(options);
+    }
+    if (options.list) {
+        setGroupList();
+    }
+} catch (err) {
+    errors.errorHandler(err);
+}
+
 Bundle();
-const Sys = require(path.join(scriptDir, "testlib.js"));
 
 if (options.C) {
     // If composing, just to that and quit.
     try {
-        var pth = path.join(scriptDir, "..", options.C);
+        var pth = path.join(config.path.cwd, options.C);
         if (fs.existsSync(pth)) {
             var json = fs.readFileSync(pth);
             var arr = JSON.parse(json);
             for (var i in arr) {
                 arr[i].id = "ITEM-1";
                 var item = JSON.stringify([arr[i]], null, 2);
-                var txt = fs.readFileSync(path.join(scriptDir, "templateTXT.txt")).toString();
+                var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
                 txt = txt.replace("%%INPUT_DATA%%", item);
                 var pos = "" + (parseInt(i, 10)+1);
                 while (pos.length < 3) {
                     pos = "0" + pos;
                 }
-                fs.writeFileSync(path.join(scriptDir, config.path.styletests, options.S, "draft_example" + pos + ".txt"), txt);
+                fs.writeFileSync(path.join(config.path.styletests, options.S, "draft_example" + pos + ".txt"), txt);
             }
+            console.log("Wrote draft tests in "+path.join(config.path.styletests, options.S));
+            console.log("Rename the files with the pattern *_*.txt to avoid overwrite.");
             process.exit(0);
         } else {
             throw new Error("CSL JSON source file not found: " + pth);
         }
     } catch (err) {
-        errorHandler(err);
+        errors.errorHandler(err);
     }
 } else if (options.single || options.group || options.all) {
     bundleValidateTest(true).catch(err => {
