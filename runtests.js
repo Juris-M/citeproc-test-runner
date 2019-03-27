@@ -534,6 +534,11 @@ async function runValidationsAsync() {
 function runFixturesAsync() {
     var fixturesPromise = new Promise((resolve, reject) => {
         console.log("Testing CSL.");
+        if (TRAVIS) {
+            if (!fs.existsSync(config.path.fixturedir)) {
+                fs.mkdirSync(config.path.fixturedir);
+            }
+        }
         if (options.r) {
             if (reporters[options.r]) {
                 if (reporters[options.r].path) {
@@ -629,7 +634,7 @@ function buildTests() {
     fixtures = fixtures.replace("%%TEST_DATA%%", JSON.stringify(testData, null, 2));
     fixtures = normalizeNewline(fixtures);
     if (!fs.existsSync(config.path.fixturedir)) {
-        fs.mkdir(config.path.fixturedir);
+        fs.mkdirSync(config.path.fixturedir);
     }
     fs.writeFileSync(path.join(config.path.fixturedir, "fixtures.js"), fixtures);
 }
