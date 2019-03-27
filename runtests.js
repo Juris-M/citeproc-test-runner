@@ -9,7 +9,7 @@ const chokidar = require("chokidar");
 const normalizeNewline = require("normalize-newline");
 
 const config = require("./lib/configs.js");
-const reporters = require("./lib/reporters.js");
+const reporters = require("./lib/reporters.js").get(config);
 const sections = require("./lib/sections.js");
 const sources = require("./lib/sources.js");
 const options = require("./lib/options.js").options;
@@ -192,16 +192,9 @@ function checkSanity() {
         console.log(usage);
         process.exit();
     }
-    if (options.r) {
-        if (reporters[options.r]) {
-            options.r = reporters[options.r];
-        } else {
-            console.log("Unknown reporter \"" + options.r + ",\" defaulting to \"landing.\"");
-            options.r = "landing";
-        }
-    } else if (TRAVIS) {
+    if (TRAVIS) {
         options.r = "spec";
-    } else {
+    } else if (!options.r) {
         options.r = "landing";
     }
     if (config.mode === "styleMode") {
@@ -337,7 +330,7 @@ function checkAll() {
                 config.testData[tn] = parseFixture(tn, lpth);
             }
         } else {
-            console.log("Skipping file in local: " + line);
+            // console.log("Skipping file in local: " + line);
         }
     }
     if (!options.style) {
@@ -352,7 +345,7 @@ function checkAll() {
                     }
                 }
             } else {
-                console.log("Skipping file in std: " + line);
+                // console.log("Skipping file in std: " + line);
             }
         }
     }
@@ -419,6 +412,7 @@ function Bundle(noStrip) {
     }
     var license = fs.readFileSync(path.join(config.path.src, "..", "LICENSE")).toString().trim();
     license = "/*\n" + license + "\n*/\n";
+
     fs.writeFileSync(path.join(config.path.src, "..", "citeproc.js"), license + ret);
     fs.writeFileSync(path.join(config.path.src, "..", "citeproc_commonjs.js"), license + ret + "\nmodule.exports = CSL");
 }
@@ -438,9 +432,7 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
                 schema,
                 tmpobj.name
             ],
-            {
-                cwd: path.join(config.path.scriptdir, "..")
-            });
+            {});
         jing.stderr.on('data', (data) => {
             reject(data.toString());
         });
@@ -541,6 +533,23 @@ async function runValidationsAsync() {
 
 function runFixturesAsync() {
     var fixturesPromise = new Promise((resolve, reject) => {
+        console.log("Testing CSL.");
+        if (options.r) {
+            if (reporters[options.r]) {
+                if (reporters[options.r].path) {
+                    options.r = reporters[options.r].path;
+                } else {
+                    console.log("Reporter not found, defaulting to \"landing.\" Install \"" + options.r + "\" with:\n");
+                    console.log("    npm install " + reporters[options.r].npmname);
+                    console.log("or")
+                    console.log("    npm install -g " + reporters[options.r].npmname);
+                    options.r = "landing";
+                }
+            } else {
+                console.log("Unknown reporter \"" + options.r + ",\" defaulting to \"landing.\"");
+                options.r = "landing";
+            }
+        }
         var args = [];
         if (options.b) {
             args.push("--no-color");
@@ -554,8 +563,11 @@ function runFixturesAsync() {
         }
         args.push(path.join(config.path.fixturedir, "fixtures.js"));
         var mocha = spawn("mocha", args, {
-            cwd: config.path.configdir,
             shell: process.platform == 'win32'
+        });
+        mocha.on("error", function(err) {
+            var error = new Error("Failure running \"mocha.\" If the command \"mocha\" is not found,\ninstall it globally with:\n\n    npm install -g mocha");
+            errors.errorHandler(error);
         });
         mocha.stdout.on('data', (data) => {
             var lines = data.toString();
