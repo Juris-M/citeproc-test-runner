@@ -702,9 +702,10 @@ try {
 Bundle();
 
 if (options.C) {
-    // If composing, just to that and quit.
+    // If composing, just do that and quit.
     try {
-        var pth = path.join(config.path.cwd, options.C);
+        var pth = options.C;
+        pth = options.C;
         if (fs.existsSync(pth)) {
             var json = fs.readFileSync(pth);
             var arr = JSON.parse(json);
