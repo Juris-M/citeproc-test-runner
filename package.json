@@ -1,12 +1,13 @@
 {
     "name": "citeproc-test-runner",
-    "version": "1.0.15",
+    "version": "1.0.16",
     "description": "CSL test runner with style support",
     "main": "runtests.js",
     "files": [
         "jing/jing-20131210.jar",
         "lib/*.js",
-        "lib/templateTXT.txt"
+        "lib/templateTXT.txt",
+        "README.md"
     ],
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
