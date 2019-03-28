@@ -271,8 +271,8 @@ function checkSingle() {
     var lpth = path.join(config.path.local, fn);
     var spth = path.join(config.path.std, fn);
     if (!fs.existsSync(lpth) && (options.style || !fs.existsSync(spth))) {
-        console.log("Looking for " + lpth);
-        console.log("Looking for " + spth);
+        console.log("Looked for " + lpth);
+        console.log("Looked for " + spth);
         throw new Error("Test fixture \"" + options.single + "\" not found.");
     }
     if (fs.existsSync(lpth)) {
@@ -329,8 +329,6 @@ function checkAll() {
             if (!skipNames[tn]) {
                 config.testData[tn] = parseFixture(tn, lpth);
             }
-        } else {
-            // console.log("Skipping file in local: " + line);
         }
     }
     if (!options.style) {
@@ -344,8 +342,6 @@ function checkAll() {
                         config.testData[tn] = parseFixture(tn, spth);
                     }
                 }
-            } else {
-                // console.log("Skipping file in std: " + line);
             }
         }
     }
