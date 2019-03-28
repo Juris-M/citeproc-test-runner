@@ -17,6 +17,7 @@ const usage = require("./lib/options.js").usage;
 const errors = require("./lib/errors.js");
 const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 
+
 var ksTimeout;
 var skipNames = {};
 var TRAVIS = process.env.TRAVIS;
@@ -486,7 +487,6 @@ async function runValidationsAsync() {
             fs.writeFileSync(path.join(config.path.configdir, ".cslValidationPos"), "0");
         }
     }
-    
     for (var key in config.testData) {
         if (startPos > validationCount) {
             process.stdout.write(".");
@@ -593,13 +593,13 @@ function runFixturesAsync() {
                                 txt = txt.replace("%%RESULT%%", result)
                                 fs.writeFileSync(path.join(config.path.styletests, options.S, fn + ".txt"), txt);
                                 // Should this be promisified?
-                                bundleValidateTest();
+                                bundleValidateTest().catch(err => errors.errorHandler(err));
                                 resolve();
                             }
                             if (key == "n" || key == "N") {
                                 skipNames[test.NAME] = true;
                                 // Should this be promisified?
-                                bundleValidateTest();
+                                bundleValidateTest().catch(err => errors.errorHandler(err));
                                 resolve();
                             }
                         }
@@ -625,6 +625,9 @@ function runFixturesAsync() {
 function buildTests() {
     var fixtures = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateJS.js")).toString();
     var testData = Object.keys(config.testData).map(k => config.testData[k]).filter(o => o);
+    if (testData.length === 0) {
+        throw new Error("No tests to run. Add tests with -S and the -C option.");
+    }
     fixtures = fixtures.replace("%%CONFIG%%", JSON.stringify(config, null, 2));
     fixtures = fixtures.replace("%%RUNPREP_PATH%%", JSON.stringify(path.join(config.path.scriptdir, "lib", "sys.js")));
     fixtures = fixtures.replace("%%TEST_DATA%%", JSON.stringify(testData, null, 2));
@@ -637,12 +640,10 @@ function buildTests() {
 
 async function bundleValidateTest(skipBundle) {
     // Bundle, load, and run tests if -s, -g, or -a
-    
     // Bundle the processor code.
     if (!skipBundle) {
         Bundle();
     }
-
     // Build and run tests
     if (options.cranky || options.watch) {
         if (options.watch) {
@@ -691,52 +692,49 @@ try {
     if (options.list) {
         setGroupList();
     }
+
+    Bundle();
+
+    if (options.C) {
+        // If composing, just do that and quit.
+        try {
+            var pth = options.C;
+            pth = options.C;
+            if (fs.existsSync(pth)) {
+                var json = fs.readFileSync(pth);
+                var arr = JSON.parse(json);
+                for (var i in arr) {
+                    arr[i].id = "ITEM-1";
+                    var item = JSON.stringify([arr[i]], null, 2);
+                    var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
+                    txt = txt.replace("%%INPUT_DATA%%", item);
+                    var pos = "" + (parseInt(i, 10)+1);
+                    while (pos.length < 3) {
+                        pos = "0" + pos;
+                    }
+                    fs.writeFileSync(path.join(config.path.styletests, options.S, "draft_example" + pos + ".txt"), txt);
+                }
+                console.log("Wrote draft tests in "+path.join(config.path.styletests, options.S));
+                console.log("Rename the files with the pattern *_*.txt to avoid overwrite.");
+                process.exit(0);
+            } else {
+                throw new Error("CSL JSON source file not found: " + pth);
+            }
+        } catch (err) {
+            errors.errorHandler(err);
+        }
+    } else if (options.single || options.group || options.all) {
+        console.log("me!");
+        bundleValidateTest(true).catch(err => errors.errorHandler(err));
+    } else if (options.l) {
+        // Otherwise we've collected a list of group names.
+        var ret = Object.keys(config.testData);
+        ret.sort();
+        for (var key of ret) {
+            console.log(key + " (" + config.testData[key].length + ")");
+        }
+        process.exit(0);
+    }
 } catch (err) {
     errors.errorHandler(err);
-}
-
-Bundle();
-
-if (options.C) {
-    // If composing, just do that and quit.
-    try {
-        var pth = options.C;
-        pth = options.C;
-        if (fs.existsSync(pth)) {
-            var json = fs.readFileSync(pth);
-            var arr = JSON.parse(json);
-            for (var i in arr) {
-                arr[i].id = "ITEM-1";
-                var item = JSON.stringify([arr[i]], null, 2);
-                var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
-                txt = txt.replace("%%INPUT_DATA%%", item);
-                var pos = "" + (parseInt(i, 10)+1);
-                while (pos.length < 3) {
-                    pos = "0" + pos;
-                }
-                fs.writeFileSync(path.join(config.path.styletests, options.S, "draft_example" + pos + ".txt"), txt);
-            }
-            console.log("Wrote draft tests in "+path.join(config.path.styletests, options.S));
-            console.log("Rename the files with the pattern *_*.txt to avoid overwrite.");
-            process.exit(0);
-        } else {
-            throw new Error("CSL JSON source file not found: " + pth);
-        }
-    } catch (err) {
-        errors.errorHandler(err);
-    }
-} else if (options.single || options.group || options.all) {
-    bundleValidateTest(true).catch(err => {
-        if (err) {
-            console.log(err);
-        }
-    });
-} else if (options.l) {
-    // Otherwise we've collected a list of group names.
-    var ret = Object.keys(config.testData);
-    ret.sort();
-    for (var key of ret) {
-        console.log(key + " (" + config.testData[key].length + ")");
-    }
-    process.exit(0);
 }
