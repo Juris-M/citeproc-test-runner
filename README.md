@@ -1,95 +1,29 @@
 # Citeproc Test Runner
 
-The Citeproc Test Runner is a powerful validation and testing tool for CSL styles based on the ``citeproc-js`` citation processor. It can be used in two ways: to run tests of the citation processor itself; and to quickly produce and run tests of new CSL code when writing or editing a citation style.
-
-To run the program, you need three things on your system:
-
-<dl>
-  <dt><b>node.js</b></dt>
-  <dd>Any recent-ish version should work. Version 7 is used for automated testing.</dd>
-  <dt><b>mocha</b></dt>
-  <dd>Install Mocha globally with <span style="font-family:courier;">npm install --global mocha</span></dd>
-  <dt><b>java</b></dt>
-  <dd>This is used to perform schema validation. Browser extension is not required, a basic command-line install is all you need.</dd>
-</dl>
-
-With the requirements above satisfied, you can install the runner and go to work with one command::
+A productivity tool for authoring citation styles in the popular [Citation Style Language](https://citationstyles.org/) (CSL) used by [Zotero](https://www.zotero.org/), [Mendeley](https://www.mendeley.com/), [Jurism](https://juris-m.github.io/) and other projects. The script assumes that [node](https://nodejs.org/), [java](https://www.java.com/en/download/) and [mocha](https://mochajs.org/) are installed (the last globally with `npm i -g mocha`). With those in place, installation is a one-liner:
 ``` bash
     npm install -g citeproc-test-runner
 ```
+After installing, start the program with `cslrun`. It will spit out instructions on setting the root directory for style tests. After configuration, `cslrun -h` will display a list of options to help you get started.
 
-The program is run by typing `cslrun` at the command line. When run without options, the program will display instructions on one final setup detail (setting the directory where style tests will be saved). When that is done, running the program again as `cslrun` will display a description of its options, so you can go straight to work.
-
-Running tests of the citation processor itself is done by making a local `git` clone of the processor repository, and running `cslrun` from its top-level directory. The command for making the clone is the following::
+The tool can be used both for building and for running tests. If you export a set of items in CSL JSON, you can build tests from them with:
 ``` bash
-    git clone --recursive https://github.com/Juris-M/citeproc-js.git
+    cslrun -S <style-nickname> -C <csl-json-file>
 ```
-
-## Watch Mode: a testing tutorial
-
-The `cslrun` command supports a simple but powerful “watch” mode for use in style development. In the scenario below, we will prepare tests for the *Journal of Irreproducible Results* (JIR). The journal [exists](http://www.jir.com), but as there is no CSL style for it in the CSL Repository, our tutorial will be largely devoid of screenshots. The steps, however, can be applied to any style that actually does exist.
-
-I'll begin by forking the `citeproc-js` GitHub repository. This will make it easy to fold my tests back into the main project ...
-
-
-![](https://juris-m.github.io/citeproc-js/fork.png)
-
-... and then I will clone a local copy of my forked `citeproc-js` repository (not the Juris-M original):
-
-    git clone --recursive git://github.com/fbennett/citeproc-js.git
-
-I will do two things in preparation for work on the JIR style:
-
-* Prepare a rough copy of the style (if it resembles another style, I might just fetch a copy of that, and change its title and ID);
-* Prepare a small collection of items in Zotero for use in testing the style, and export the full set of items to a file, in CSL JSON format.
-
-I am now ready to begin working with the `runtests.js` script. The first step is to generate `citeproc` test fixtures for each of the exported library items. `runtests.js` can do this for me, with options like the following:
+That will create a subdirectory with the style nickname under your style-test root, and populate it with boilerplate test fixtures built from the data in the export file. You can then run:
 ``` bash
-  cslrun \
-       -C path/to/exported-items.json \
-       -S journal-of-irreproducible-results
+    cslrun -S <style-nickname> -w <csl-style-file> -a -k
 ```
+That will run each of the tests in turn, failing miserably but with an option to adopt the processor's return as the expected result for the test. If you hit `Y` for each fixture, you have a set of passing tests, which you can tweak if there are anomalies in the style that generated the output. Be sure to rename the fixtures from their boilerplate names, since another run with the `-C` option will overwrite them otherwise.
 
-I now have a set of boilerplate tests that will fail miserably, but those that pass can be quickly converted to passing tests, using the `-k` option like this:
+To use the tests as a validation and output monitor when editing a style, remove the `-k` option:
 ``` bash
-  node ./tests/runtests.js \
-       -S journal-of-irreproducible-results \
-       -w ../somepath/journal-of-irreproducible-results.csl \
-       -a \
-       -k
+    cslrun -S <style-nickname> -w <csl-style-file> -a
 ```
+The runner will watch the style file, and rerun validation and tests when it changes on disk, for pretty-good dynamic validation with any editor that saves files. Long-suffering users of `nano` and `edlin` rejoice!
 
-The output will look something like this:
+As a nice extra in the CSL-M zone, the `-w` option can be repeated, to watch a jurisdiction submodule in addition to the parent style.
 
-![](https://juris-m.github.io/citeproc-js/style-fail.png)
-
-If I respond to the prompt with `Y`, the output of the style will be adopted as the RESULT of the test fixture. If I respond with `N`, the fixture will be skipped, and the next test will be shown, until the test set is exhausted.
-
-The test fixtures are located in plain text files in a `styletests` subdirectory, where they can be edited directly:
-``` bash
-    ./tests/styletests/journal-of-irreproducible-results
-```
-
-The `-C` option that generates the boilerplate is destructive—it will overwrite existing files—so be sure to rename the files after populating the directory. In test fixture filenames, the underscore (`_`) is required. The first portion of the name is the group to which the test belongs. You will notice that, unlike the fixtures used to test the processor, style fixtures do not contain a `CSL` section, for the obvious reason that the CSL code of the target style is always used.
-
-Once I have prepared a full set of passing tests, I can set the script to watch the style file when I am making changes to it. The command for that is the same as for rapid “editing” of the fixtures, but without the `-k` option.:
-``` bash  
-  node ./tests/runtests.js \
-       -S journal-of-irreproducible-results \
-       -w ../somepath/journal-of-irreproducible-results.csl \
-       -a
-```
-
-Each time I save the CSL file, the style code will be validated before tests are run. Validation failures look like this:
-
-![](https://juris-m.github.io/citeproc-js/validation-fail.png)
-
-When I am happy with my tests, I can share them with others, so my careful work will not be undone by someone else’s changes.
-
-Done.
-
-----------------------
+Enjoy!
 
 FB
-
-2019-03-27
