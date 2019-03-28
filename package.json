@@ -1,6 +1,6 @@
 {
     "name": "citeproc-test-runner",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "description": "CSL test runner with style support",
     "main": "runtests.js",
     "files": [
@@ -18,7 +18,7 @@
     "dependencies": {
         "chai": "^4.2.0",
         "chokidar": "^2.1.2",
-        "citeproc": "^2.1.227",
+        "citeproc": "^2.1.228",
         "citeproc-csl-schemata": "^1.0.1",
         "citeproc-juris-modules": "^1.0.1",
         "citeproc-locales": "^1.0.2",
@@ -26,7 +26,6 @@
         "getopts": "^2.2.4",
         "normalize-newline": "^3.0.0",
         "tmp": "0.0.33",
-        "try-to-catch": "^1.1.1",
         "yaml": "^1.4.0"
     },
     "repository": {
