@@ -724,7 +724,6 @@ try {
             errors.errorHandler(err);
         }
     } else if (options.single || options.group || options.all) {
-        console.log("me!");
         bundleValidateTest(true).catch(err => errors.errorHandler(err));
     } else if (options.l) {
         // Otherwise we've collected a list of group names.
