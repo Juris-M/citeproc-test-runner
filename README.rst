@@ -43,7 +43,7 @@ Watch Mode: a testing tutorial
 
 The ``cslrun`` command supports a simple but powerful “watch” mode for
 use in style development. In the scenario below, we will prepare tests
-for the Journal Irreproducible Results (JIR). The journal `exists
+for the *Journal of Irreproducible Results* (JIR). The journal `exists
 <http://www.jir.com/>`_, but as there is no CSL style for it in the
 CSL Repository, our tutorial will be largely devoid of
 screenshots. The steps, however, can be applied to any style that
