@@ -270,7 +270,9 @@ function checkSingle() {
         throw new Error("Single test fixture must be specified as [group]_[name]");
     }
     var lpth = path.join(config.path.local, fn);
-    var spth = path.join(config.path.std, fn);
+    if (config.path.std) {
+        var spth = path.join(config.path.std, fn);
+    }
     if (!fs.existsSync(lpth) && (options.style || !fs.existsSync(spth))) {
         console.log("Looked for " + lpth);
         console.log("Looked for " + spth);
@@ -589,6 +591,7 @@ function runFixturesAsync() {
                                 var result = sys.run();
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
+                                txt = txt.replace("%%MODE%%", test.MODE);
                                 txt = txt.replace("%%INPUT_DATA%%", input);
                                 txt = txt.replace("%%RESULT%%", result)
                                 fs.writeFileSync(path.join(config.path.styletests, options.S, fn + ".txt"), txt);
@@ -707,6 +710,7 @@ try {
                     arr[i].id = "ITEM-1";
                     var item = JSON.stringify([arr[i]], null, 2);
                     var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
+                    txt = txt.replace("%%MODE%%", "citation");
                     txt = txt.replace("%%INPUT_DATA%%", item);
                     var pos = "" + (parseInt(i, 10)+1);
                     while (pos.length < 3) {
@@ -724,7 +728,7 @@ try {
             errors.errorHandler(err);
         }
     } else if (options.single || options.group || options.all) {
-        bundleValidateTest(true).catch(err => errors.errorHandler(err));
+        bundleValidateTest().catch(err => errors.errorHandler(err));
     } else if (options.l) {
         // Otherwise we've collected a list of group names.
         var ret = Object.keys(config.testData);

@@ -1,5 +1,5 @@
 >>===== MODE =====>>
-bibliography
+%%MODE%%
 <<===== MODE =====<<
 
 >>===== RESULT =====>>
