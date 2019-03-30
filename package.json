@@ -1,6 +1,6 @@
 {
     "name": "citeproc-test-runner",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "description": "CSL test runner with style support",
     "main": "runtests.js",
     "files": [
