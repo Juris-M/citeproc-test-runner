@@ -19,6 +19,7 @@ const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 
 
 var ksTimeout;
+var cdTimeout;
 var skipNames = {};
 var TRAVIS = process.env.TRAVIS;
 
@@ -394,7 +395,10 @@ function fetchTestData() {
 
 function Bundle(noStrip) {
     if (!config.path.src) {
+        console.log("Using processor from package");
         return;
+    } else {
+        console.log("Rebundling processor");
     }
     // The markup of the code is weird, so we do weird things to strip
     // comments.
@@ -477,6 +481,7 @@ async function runValidationsAsync() {
     var validationGoal = Object.keys(config.testData).length;
     var startPos = 0;
     if (options.w) {
+        console.log("Watching: " + options.watch);
         console.log("Validating CSL.");
     } else {
         console.log("Validating CSL in " + validationGoal + " fixtures.");
@@ -641,25 +646,29 @@ function buildTests() {
     fs.writeFileSync(path.join(config.path.fixturedir, "fixtures.js"), fixtures);
 }
 
-async function bundleValidateTest(skipBundle) {
+async function bundleValidateTest() {
     // Bundle, load, and run tests if -s, -g, or -a
     // Bundle the processor code.
-    if (!skipBundle) {
-        Bundle();
+    if (options.watch) {
+        clear();
     }
+    Bundle();
     // Build and run tests
     if (options.cranky || options.watch) {
         if (options.watch) {
-            clear();
             fetchTestData();
             buildTests();
             await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
             var watcher = chokidar.watch(options.watch[0]);
-            watcher.on("change", (event, filename) => {
-                clear();
-                fetchTestData();
-                buildTests();
-                runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
+            watcher.once("change", (event, filename) => {
+                if (!cdTimeout) {
+                    cdTimeout = setTimeout(function() { cdTimeout=null }, 100) // block for 0.1 second to avoid stutter
+                    clear();
+                    Bundle();
+                    fetchTestData();
+                    buildTests();
+                    runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
+                }
             });
             for (var pth of options.watch.slice(1)) {
                 watcher.add(pth);
@@ -680,10 +689,6 @@ async function bundleValidateTest(skipBundle) {
  * Do stuff
  */
 
-if (options.watch) {
-    console.log("Watching: " + options.watch);
-}
-
 try {
     checkSanity();
     if (options.style) {
@@ -695,8 +700,6 @@ try {
     if (options.list) {
         setGroupList();
     }
-
-    Bundle();
 
     if (options.C) {
         // If composing, just do that and quit.
