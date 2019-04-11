@@ -481,7 +481,7 @@ async function runValidationsAsync() {
     var validationGoal = Object.keys(config.testData).length;
     var startPos = 0;
     if (options.w) {
-        console.log("Watching: " + options.watch);
+        console.log("Watching: " + options.watch[0]);
         console.log("Validating CSL.");
     } else {
         console.log("Validating CSL in " + validationGoal + " fixtures.");
@@ -597,8 +597,20 @@ function runFixturesAsync() {
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
                                 txt = txt.replace("%%MODE%%", test.MODE);
-                                txt = txt.replace("%%INPUT_DATA%%", input);
+                                txt = txt.replace("%%INPUT%%", input);
                                 txt = txt.replace("%%RESULT%%", result)
+                                for (var key in test) {
+                                    if (["MODE", "INPUT", "RESULT", "NAME", "PATH", "CSL"].indexOf(key) > -1) {
+                                        continue;
+                                    }
+                                    if (key.toUpperCase() !== key) {
+                                        continue;
+                                    }
+                                    var testKey = typeof test[key] == "object" ? JSON.stringify(test[key], null, 2) : test[key];
+                                    var block = "\n\n>>===== " + key + " =====>>\n" + testKey.trim() + "\n<<===== " + key + " =====<<\n";
+                                    txt += block;
+                                }
+                                
                                 fs.writeFileSync(path.join(config.path.styletests, options.S, fn + ".txt"), txt);
                                 // Should this be promisified?
                                 bundleValidateTest().catch(err => errors.errorHandler(err));
@@ -660,9 +672,9 @@ async function bundleValidateTest() {
             buildTests();
             await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
             var watcher = chokidar.watch(options.watch[0]);
-            watcher.once("change", (event, filename) => {
+            watcher.on("change", (event, filename) => {
                 if (!cdTimeout) {
-                    cdTimeout = setTimeout(function() { cdTimeout=null }, 100) // block for 0.1 second to avoid stutter
+                    cdTimeout = setTimeout(function() { cdTimeout=null }, 200) // block for 0.1 second to avoid stutter
                     clear();
                     Bundle();
                     fetchTestData();
@@ -714,7 +726,7 @@ try {
                     var item = JSON.stringify([arr[i]], null, 2);
                     var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
                     txt = txt.replace("%%MODE%%", "citation");
-                    txt = txt.replace("%%INPUT_DATA%%", item);
+                    txt = txt.replace("%%INPUT%%", item);
                     var pos = "" + (parseInt(i, 10)+1);
                     while (pos.length < 3) {
                         pos = "0" + pos;

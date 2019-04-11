@@ -27,5 +27,5 @@
 <<===== CITATIONS =====<<
 
 >>===== INPUT =====>>
-%%INPUT_DATA%%
+%%INPUT%%
 <<===== INPUT =====<<
