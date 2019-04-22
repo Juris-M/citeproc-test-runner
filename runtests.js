@@ -7,15 +7,19 @@ const tmp = require("tmp");
 const clear = require("cross-clear");
 const chokidar = require("chokidar");
 const normalizeNewline = require("normalize-newline");
+const fetchURL = require("fetch-promise");
+const zoteroToCSLM = require('zotero2jurismcsl').convert;
+const zoteroToCSL = require('zotero-to-csl');
 
 const config = require("./lib/configs.js");
 const reporters = require("./lib/reporters.js").get(config);
-const sections = require("./lib/sections.js");
+const parseFixture = require("./lib/fixture-parser.js").parseFixture;
 const sources = require("./lib/sources.js");
 const options = require("./lib/options.js").options;
 const usage = require("./lib/options.js").usage;
 const errors = require("./lib/errors.js");
 const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
+const { styleCapabilities } = require("./lib/style-capabilities");
 
 
 var ksTimeout;
@@ -42,103 +46,6 @@ process.stdin.on('data', function( key ){
 /* 
  * Functions
  */
-function Parser(options, tn, fpth) {
-    this.options = options;
-    this.fpth = fpth;
-    this.obj = {
-        NAME: [tn],
-        PATH: [fpth]
-    };
-    this.section = false;
-    this.state = null;
-    this.openRex = new RegExp("^.*>>===*\\s(" + Object.keys(sections).join("|") + ")\\s.*=>>.*");
-    this.closeRex = new RegExp("^.*<<===*\\s(" + Object.keys(sections).join("|") + ")\\s.*=<<.*");
-    this.dumpObj = function() {
-        for (var key in this.obj) {
-            this.obj[key] = this.obj[key].join("\n");
-            if (sections[key].type === "json") {
-                try {
-                    this.obj[key] = JSON.parse(this.obj[key]);
-                } catch (err) {
-                    console.log(this.fpth);
-                    throw new Error("JSON parse fail for tag \"" + key + "\"");
-                }
-            }
-        }
-        for (var key of Object.keys(sections).filter(key => sections[key].required)) {
-            if (this.options.watch && key === "CSL") {
-                var inStyle = false;
-                this.obj[key] = fs.readFileSync(this.options.watch[0]).toString();
-                var cslList = this.obj[key].split(/(?:\r\n|\n)/);
-                for (var i in cslList) {
-                    var line = cslList[i];
-                    if (line.indexOf("<style") > -1) {
-                        inStyle = true;
-                    }
-                    if (inStyle) {
-                        var m = line.match(/default-locale=[\"\']([^\"\']+)[\"\']/);
-                        if (m && m[1].indexOf("-x-") === -1) {
-                            var defaultLocale = m[1] + "-x-sort-en";
-                            cslList[i] = cslList[i].replace(/default-locale=[\"\']([^\"\']+)[\"\']/, "default-locale=\"" + defaultLocale + "\"");
-                            this.obj.CSL = cslList.join("\n");
-                        }
-                    }
-                    if (inStyle && line.indexOf(">") > -1) {
-                        break;
-                    }
-                }
-            }
-            if ("undefined" === typeof this.obj[key]) {
-                console.log(this.fpth);
-                throw new Error("Missing required tag \"" + key + "\"");
-            }
-        }
-        return this.obj;
-    };
-    this.checkLine = function (line) {
-        var m = null;
-        if (this.openRex.test(line)) {
-            m = this.openRex.exec(line);
-            if (this.state) {
-                console.log(this.fpth);
-                throw new Error("Attempted to open tag \"" + m[1] + "\" before tag \"" + this.section + "\" was closed.");
-            }
-            this.section = m[1];
-            this.state = "opening";
-        } else if (this.closeRex.test(line)) {
-            m = this.closeRex.exec(line);
-            if (this.section !== m[1]) {
-                console.log(this.fpth);
-                throw new Error("Expected closing tag \"" + this.section + "\" but found \"" + m[1] + "\"");
-            }
-            this.state = "closing";
-            // for empty results
-            if (this.section === "RESULT" && !this.obj[this.section]) {
-                this.obj[this.section] = [""];
-            }
-        } else {
-            if (this.state === "opening") {
-                this.obj[this.section] = [];
-                this.state = "reading";
-            } else if (this.state === "closing") {
-                this.state = null;
-            }
-        }
-        if (this.state === "reading") {
-            this.obj[this.section].push(line);
-        }
-    };
-}
-
-function parseFixture(tn, fpth) {
-    var raw = fs.readFileSync(fpth).toString();
-    var parser = new Parser(options, tn, fpth);
-    for (var line of raw.split(/(?:\r\n|\n)/)) {
-        parser.checkLine(line);
-    }
-    return parser.dumpObj();
-}
-
 function Stripper(fn, noStrip) {
     this.fn = fn;
     this.noStrip = noStrip;
@@ -200,11 +107,14 @@ function checkSanity() {
         options.r = "landing";
     }
     if (config.mode === "styleMode") {
-        if (!options.S) {
-            throw new Error("Running in styleMode. The -S option is required, with either -w or -C. Add -h for help.");
+        if (!options.watch) {
+            throw new Error("Running in styleMode. The -w option is required. Add -h for help.");
         }
     }
-    if (!options.C) {
+    if (options.C) {
+        throw new Error("The -C option has been discontinued. See cslrun --help for details.");
+    }
+    if (!options.U) {
         if (["s", "g", "a", "l"].filter(o => options[o]).length > 1) {
             throw new Error("Only one of -s, -g, -a, or -l may be invoked.");
         }
@@ -213,14 +123,11 @@ function checkSanity() {
             throw new Error("Use one of -s, -g, -a, or -l.");
         }
     }
-    if (!options.C && ((options.watch && !options.style) || (!options.watch && options.style))) {
-        throw new Error("Without -C, the -w and -S options must be set together.");
+    if (options.U && !options.watch) {
+        throw new Error("The -U option requires -w.");
     }
-    if (options.C && !options.style) {
-        throw new Error("The -C option requires -S.");
-    }
-    if (options.k && !options.style) {
-        throw new Error("The -k option requires -S and -w.");
+    if (options.k && !options.watch) {
+        throw new Error("The -k option requires -w.");
     }
 }
 
@@ -280,12 +187,12 @@ function checkSingle() {
         throw new Error("Test fixture \"" + options.single + "\" not found.");
     }
     if (fs.existsSync(lpth)) {
-        config.testData[tn] = parseFixture(tn, lpth);
+        config.testData[tn] = parseFixture(options, tn, lpth);
     }
     if (!options.style) {
         if (fs.existsSync(spth)) {
             checkOverlap(tn);
-            config.testData[tn] = parseFixture(tn, spth);
+            config.testData[tn] = parseFixture(options, tn, spth);
         }
     }
 }
@@ -299,7 +206,7 @@ function checkGroup() {
             var lpth = path.join(config.path.local, line);
             var tn = line.replace(/.txt\r?$/, "");
             if (!skipNames[tn]) {
-                config.testData[tn] = parseFixture(tn, lpth);
+                config.testData[tn] = parseFixture(options, tn, lpth);
             }
         }
     }
@@ -312,7 +219,7 @@ function checkGroup() {
                 if (!skipNames[tn]) {
                     if (fs.existsSync(spth)) {
                         checkOverlap(tn);
-                        config.testData[tn] = parseFixture(tn, spth);
+                        config.testData[tn] = parseFixture(options, tn, spth);
                     }
                 }
             }
@@ -331,7 +238,7 @@ function checkAll() {
             var lpth = path.join(config.path.local, line);
             var tn = line.replace(/.txt\r?$/, "");
             if (!skipNames[tn]) {
-                config.testData[tn] = parseFixture(tn, lpth);
+                config.testData[tn] = parseFixture(options, tn, lpth);
             }
         }
     }
@@ -343,7 +250,7 @@ function checkAll() {
                 if (!skipNames[tn]) {
                     if (fs.existsSync(spth)) {
                         checkOverlap(tn);
-                        config.testData[tn] = parseFixture(tn, spth);
+                        config.testData[tn] = parseFixture(options, tn, spth);
                     }
                 }
             }
@@ -425,6 +332,7 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
         var tmpobj = tmp.fileSync();
         fs.writeFileSync(tmpobj.name, test.CSL);
         var buf = [];
+        //console.log("java -client -jar " + config.path.jing + " -c " + schema + " " + tmpobj.name);
         var jing = spawn(
             "java",
             [
@@ -478,6 +386,7 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
 
 async function runValidationsAsync() {
     var validationCount = 0;
+    //console.log(config.testData)
     var validationGoal = Object.keys(config.testData).length;
     var startPos = 0;
     if (options.w) {
@@ -486,7 +395,7 @@ async function runValidationsAsync() {
     } else {
         console.log("Validating CSL in " + validationGoal + " fixtures.");
     }
-    if (!options.w && !options.l && !options.C) {
+    if (!options.w && !options.l && !options.U) {
         if (options.a && fs.existsSync(path.join(config.path.configdir, ".cslValidationPos"))) {
             startPos = fs.readFileSync(path.join(config.path.configdir, ".cslValidationPos")).toString();
             startPos = parseInt(startPos, 10);
@@ -597,10 +506,12 @@ function runFixturesAsync() {
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
                                 txt = txt.replace("%%MODE%%", test.MODE);
+                                txt = txt.replace("%%KEYS%%", JSON.stringify(test.KEYS, null, 2));
+                                txt = txt.replace("%%DESCRIPTION%%", test.DESCRIPTION);
                                 txt = txt.replace("%%INPUT%%", input);
                                 txt = txt.replace("%%RESULT%%", result)
                                 for (var key in test) {
-                                    if (["MODE", "INPUT", "RESULT", "NAME", "PATH", "CSL"].indexOf(key) > -1) {
+                                    if (["MODE", "INPUT", "RESULT", "NAME", "PATH", "CSL", "KEYS", "DESCRIPTION"].indexOf(key) > -1) {
                                         continue;
                                     }
                                     if (key.toUpperCase() !== key) {
@@ -644,13 +555,11 @@ function runFixturesAsync() {
 
 function buildTests() {
     var fixtures = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateJS.js")).toString();
-    var testData = Object.keys(config.testData).map(k => config.testData[k]).filter(o => o);
-    if (testData.length === 0) {
-        throw new Error("No tests to run. Add tests with -S and the -C option.");
+    if (Object.keys(config.testData).length === 0) {
+        errors.setupGuidance("No tests to run.");
     }
     fixtures = fixtures.replace("%%CONFIG%%", JSON.stringify(config, null, 2));
     fixtures = fixtures.replace("%%RUNPREP_PATH%%", JSON.stringify(path.join(config.path.scriptdir, "lib", "sys.js")));
-    fixtures = fixtures.replace("%%TEST_DATA%%", JSON.stringify(testData, null, 2));
     fixtures = normalizeNewline(fixtures);
     if (!fs.existsSync(config.path.fixturedir)) {
         fs.mkdirSync(config.path.fixturedir);
@@ -701,58 +610,138 @@ async function bundleValidateTest() {
  * Do stuff
  */
 
-try {
-    checkSanity();
-    if (options.style) {
-        setLocalPathToStyleTestPath(options.style);
-    }
-    if (options.watch) {
-        setWatchFiles(options);
-    }
-    if (options.list) {
-        setGroupList();
-    }
+(async function() {
+    try {
+        checkSanity();
+        if (options.watch) {
+            setWatchFiles(options);
+        }
+        if (options.list) {
+            setGroupList();
+        }
+        
+        // If we are using -w and -S is not set, sniff out the style name and set it on
+        // options, so legacy code will do its thing.
+        if (options.watch && !options.style) {
+            var txt = fs.readFileSync(options.watch[0]).toString();
+            config.styleCapabilities = styleCapabilities(txt);
+            options.style = config.styleCapabilities.styleName;
+            options.S = config.styleCapabilities.styleName;
+        }
+        if (options.style) {
+            setLocalPathToStyleTestPath(options.style);
+        }
+        
+        if (options.U) {
 
-    if (options.C) {
-        // If composing, just do that and quit.
-        try {
-            var pth = options.C;
-            pth = options.C;
-            if (fs.existsSync(pth)) {
-                var json = fs.readFileSync(pth);
-                var arr = JSON.parse(json);
-                for (var i in arr) {
-                    arr[i].id = "ITEM-1";
-                    var item = JSON.stringify([arr[i]], null, 2);
-                    var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
-                    txt = txt.replace("%%MODE%%", "citation");
-                    txt = txt.replace("%%INPUT%%", item);
-                    var pos = "" + (parseInt(i, 10)+1);
-                    while (pos.length < 3) {
-                        pos = "0" + pos;
-                    }
-                    fs.writeFileSync(path.join(config.path.styletests, options.S, "draft_example" + pos + ".txt"), txt);
-                }
-                console.log("Wrote draft tests in "+path.join(config.path.styletests, options.S));
-                console.log("Rename the files with the pattern *_*.txt to avoid overwrite.");
-                process.exit(0);
-            } else {
-                throw new Error("CSL JSON source file not found: " + pth);
+            // Contact server, analyze return, check current fixtures,
+            // update with any missing fixtures. Big one.
+            // (1) Get collections from API
+            var json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/top");
+            var obj = JSON.parse(json.buf.toString());
+            var collectionKey = obj.filter(o => (o.data.name === options.S))
+                .map(o => o.data.key);
+            if (!collectionKey || !collectionKey[0]) {
+                errors.setupGuidance("No collection found for style \"" + options.S + "\" in library of test items.");
             }
-        } catch (err) {
-            errors.errorHandler(err);
+            collectionKey = collectionKey[0];
+            json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/" + collectionKey + "/items/top");
+            obj = JSON.parse(json.buf.toString());
+            // Need to read off the keys of the existing tests before building the data array.
+            // Can get the highest test number, or the holes in existing numbers, while we're at it.
+            var styleTestDir = path.join(config.path.styletests, options.S);
+            var doneKeys = {};
+            var doneNums = {};
+            for (var fileName of fs.readdirSync(styleTestDir)) {
+                var fixture = parseFixture(options, fileName, path.join(styleTestDir, fileName));
+                for (var key of fixture.KEYS) {
+                    doneKeys[key] = true;
+                }
+                var m = fileName.match(/[^0-9]*([0-9]+)/);
+                if (m) {
+                    doneNums[parseInt(m[1], 10)] = true;
+                }
+            }
+            var max = 0;
+            var doneNumsLst = Object.keys(doneNums);
+            if (doneNumsLst.length > 0) {
+                var max = Object.keys(doneNums).map(o => parseInt(o)).reduce(function(a, b) {
+                    return Math.max(a, b);
+                });
+            } 
+            var newNums = [];
+            for (var i=1,ilen=(max + obj.length + 1); i<ilen; i++) {
+                if (!doneNums[i]) {
+                    newNums.push(i);
+                    if (newNums.length === obj.length) {
+                        break;
+                    }
+                }
+            }
+            newNums.reverse();
+            var arr = [];
+            for (var o of obj) {
+                var key = o.data.key;
+                if (doneKeys[key]) {
+                    continue;
+                }
+                delete o.data.key;
+                var description = o.data.abstractNote;
+                if (description) {
+                    description = description.slice(0, 50).replace(/\n+/g, " ");
+                }
+                delete o.data.abstractNote;
+                delete o.data.version;
+                delete o.data.dateAdded;
+                delete o.data.dateModified;
+                var cslData = zoteroToCSL(o.data);
+                var cslItem = zoteroToCSLM(o, cslData);
+                arr.push({
+                    key: key,
+                    item: cslItem,
+                    description: description
+                });
+            }
+            // Templates get some big changes here.
+            for (var i in arr) {
+                arr[i].id = "ITEM-1";
+                var item = JSON.stringify([arr[i]], null, 2);
+                var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
+                txt = txt.replace("%%MODE%%", "all");
+                txt = txt.replace("%%KEYS%%", JSON.stringify([arr[i].key], null, 2));
+                txt = txt.replace("%%INPUT%%", JSON.stringify([arr[i].item], null, 2));
+                // Can we do something just a little more elegant with file naming?
+                
+                var pos = "" + newNums.pop();
+                while (pos.length < 3) {
+                    pos = "0" + pos;
+                }
+                var fileStub = "style_test" + pos;
+                if (arr[i].description) {
+                    txt = txt.replace("%%DESCRIPTION%%", arr[i].description);
+                } else {
+                    txt = txt.replace("%%DESCRIPTION%%", "should pass test " + fileStub)
+                }
+                fs.writeFileSync(path.join(config.path.styletests, options.S, fileStub + ".txt"), txt);
+            }
+            if (arr.length > 0) {
+                console.log("Maybe wrote draft tests to "+path.join(config.path.styletests, options.S));
+            } else {
+                console.log("No tests to write this time");
+            }
+            process.exit(0);
+        } else if (options.single || options.group || options.all) {
+            bundleValidateTest().catch(err => errors.errorHandler(err));
+        } else if (options.l) {
+            // Otherwise we've collected a list of group names.
+            var ret = Object.keys(config.testData);
+            ret.sort();
+            for (var key of ret) {
+                console.log(key + " (" + config.testData[key].length + ")");
+            }
+            process.exit(0);
         }
-    } else if (options.single || options.group || options.all) {
-        bundleValidateTest().catch(err => errors.errorHandler(err));
-    } else if (options.l) {
-        // Otherwise we've collected a list of group names.
-        var ret = Object.keys(config.testData);
-        ret.sort();
-        for (var key of ret) {
-            console.log(key + " (" + config.testData[key].length + ")");
-        }
-        process.exit(0);
+    } catch (err) {
+        errors.errorHandler(err);
     }
-} catch (err) {
-    errors.errorHandler(err);
-}
+})();

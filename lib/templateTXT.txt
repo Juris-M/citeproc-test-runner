@@ -2,29 +2,17 @@
 %%MODE%%
 <<===== MODE =====<<
 
+>>===== KEYS =====>>
+%%KEYS%%
+<<===== KEYS =====<<
+
+>>===== DESCRIPTION =====>>
+%%DESCRIPTION%%
+<<===== DESCRIPTION =====<<
+
 >>===== RESULT =====>>
 %%RESULT%%
 <<===== RESULT =====<<
-
->>===== CITATIONS =====>>
-[
-    [
-        {
-            "citationID": "CITATION-1", 
-            "citationItems": [
-                {
-                    "id": "ITEM-1"
-                }
-            ], 
-            "properties": {
-                "noteIndex": 1
-            }
-        }, 
-        [], 
-        []
-    ]
-]
-<<===== CITATIONS =====<<
 
 >>===== INPUT =====>>
 %%INPUT%%
