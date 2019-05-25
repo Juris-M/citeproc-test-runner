@@ -21,7 +21,6 @@ const errors = require("./lib/errors.js");
 const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 const { styleCapabilities } = require("./lib/style-capabilities");
 
-
 var ksTimeout;
 var cdTimeout;
 var skipNames = {};
@@ -652,7 +651,9 @@ async function bundleValidateTest() {
             var styleTestDir = path.join(config.path.styletests, options.S);
             var doneKeys = {};
             var doneNums = {};
+            var rex = new RegExp("^.*_.*\.txt\\r?$");
             for (var fileName of fs.readdirSync(styleTestDir)) {
+                if (!rex.test(fileName)) continue;
                 var fixture = parseFixture(options, fileName, path.join(styleTestDir, fileName));
                 for (var key of fixture.KEYS) {
                     doneKeys[key] = true;
