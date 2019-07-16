@@ -313,11 +313,14 @@ function Bundle(noStrip) {
     var ret = "";
     for (var fn of sources) {
         var txt = fs.readFileSync(path.join(config.path.src, fn + ".js")).toString();
+        /*
         var stripper = new Stripper(fn, noStrip);
         for (var line of txt.split(/(?:\r\n|\n)/)) {
             stripper.checkLine(line);
         }
         ret += stripper.dumpArr() + "\n";
+        */
+        ret += txt + "\n";
     }
     var license = fs.readFileSync(path.join(config.path.src, "..", "LICENSE")).toString().trim();
     license = "/*\n" + license + "\n*/\n";
