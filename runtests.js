@@ -357,7 +357,13 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
             // If we are watching and code is 0, chain to integration tests.
             // Otherwise stop here.
             if (code == 0 && options.watch) {
-                await runFixturesAsync();
+
+                // XXX Control this with the -c option?
+                if (options.c) {
+                    process.exit();
+                } else {
+                    await runFixturesAsync();
+                }
                 resolve();
             } else if (code == 0) {
                 process.stdout.write("+");
@@ -373,7 +379,9 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
                     console.log(line.toString().replace(/^.*?:([0-9]+):([0-9]+):\s*(.*)$/m, "[$1] : $3"));
                 }
                 console.log("\nValidation failure for " + test.NAME);
-                if (!options.watch) {
+                if (options.watch && options.c) {
+                    process.exit();
+                } else if (!options.watch) {
                     validationCount--;
                     fs.writeFileSync(path.join(config.path.configdir, ".cslValidationPos"), "" + validationCount);
                     process.exit(0);
@@ -582,10 +590,12 @@ async function bundleValidateTest() {
         buildTests();
         if (options.novalidation) {
             await runFixturesAsync();
+        } else if (options.validationonly) {
+            //
         } else {
             await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
         }
-        if (options.once) {
+        if (options.once || options.validationonly) {
             process.exit();
         }
         var watcher = chokidar.watch(options.watch[0]);
