@@ -577,30 +577,35 @@ async function bundleValidateTest() {
     }
     Bundle();
     // Build and run tests
-    if (options.cranky || options.watch) {
-        if (options.watch) {
-            fetchTestData();
-            buildTests();
-            await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
-            var watcher = chokidar.watch(options.watch[0]);
-            watcher.on("change", (event, filename) => {
-                if (!cdTimeout) {
-                    cdTimeout = setTimeout(function() { cdTimeout=null }, 200) // block for 0.1 second to avoid stutter
-                    clear();
-                    Bundle();
-                    fetchTestData();
-                    buildTests();
-                    runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
-                }
-            });
-            for (var pth of options.watch.slice(1)) {
-                watcher.add(pth);
-            }
+    if (options.watch) {
+        fetchTestData();
+        buildTests();
+        if (options.novalidation) {
+            await runFixturesAsync();
         } else {
-            fetchTestData();
-            buildTests();
             await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
         }
+        if (options.once) {
+            process.exit();
+        }
+        var watcher = chokidar.watch(options.watch[0]);
+        watcher.on("change", (event, filename) => {
+            if (!cdTimeout) {
+                cdTimeout = setTimeout(function() { cdTimeout=null }, 200) // block for 0.1 second to avoid stutter
+                clear();
+                Bundle();
+                fetchTestData();
+                buildTests();
+                runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
+            }
+        });
+        for (var pth of options.watch.slice(1)) {
+            watcher.add(pth);
+        }
+    } else if (options.cranky) {
+        fetchTestData();
+        buildTests();
+        await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
     } else {
         fetchTestData();
         buildTests();
