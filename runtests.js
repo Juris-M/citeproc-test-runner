@@ -514,7 +514,7 @@ function runFixturesAsync() {
                             
                             if (key == "y" || key == "Y") {
                                 var sys = new Sys(config, test, []);
-                                sys.preloadAbbreviationSets();
+                                sys.preloadAbbreviationSets(config);
                                 var result = sys.run();
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
