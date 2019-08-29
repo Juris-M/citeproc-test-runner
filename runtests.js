@@ -11,6 +11,8 @@ const fetchURL = require("fetch-promise");
 const zoteroToCSLM = require('zotero2jurismcsl').convert;
 const zoteroToCSL = require('zotero-to-csl');
 
+var getAbbrevPath = require("citeproc-abbrevs").getAbbrevPath;
+
 const config = require("./lib/configs.js");
 const reporters = require("./lib/reporters.js").get(config);
 const parseFixture = require("./lib/fixture-parser.js").parseFixture;
@@ -512,6 +514,7 @@ function runFixturesAsync() {
                             
                             if (key == "y" || key == "Y") {
                                 var sys = new Sys(config, test, []);
+                                sys.preloadAbbreviationSets();
                                 var result = sys.run();
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
@@ -632,6 +635,11 @@ async function bundleValidateTest() {
         checkSanity();
         if (options.watch) {
             setWatchFiles(options);
+            if (options.A) {
+                config.path.jurisAbbrevPath = options.A;
+            } else {
+                config.path.jurisAbbrevPath = getAbbrevPath();
+            }
         }
         if (options.list) {
             setGroupList();
