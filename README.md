@@ -7,15 +7,31 @@ After installation, starting the program with `cslrun` will spit out instruction
 
 ## Setting up
 
-CTR can build tests for individual styles, using items from a shared public library. This allows style maintainers to quickly confirm that changes subsequently made to the style do not have unwanted side effects.
+### Joining the test items library
 
-Tests are identified to a style using its *slug name*, which is the last portion of the style's CSL `id` string. For example, the slug name of the style `http://www.zotero.org/styles/cell` is `cell`.
+CTR can build tests for individual styles, using items from a shared public library. As a first step, visit the "Jurism Test Submissions" library (below), join it, and then sync Jurism or Zotero to add the library to your local client:
+
+```bash
+    https://www.zotero.org/groups/2339078/jurism_test_submissions
+```
+
+**Note:** Earlier versions of ``cslrun`` were set to use a different library. 
+
+### Adding a collection of style items
+
+Tests are identified to a style using its *slug name*, which is the last portion of the style's CSL `id` string. For example, the slug name of the style `http://www.zotero.org/styles/cell` is `cell`. 
 
 Tests are written into and run from a local *style tests directory*. To facilitate the sharing of tests among maintainers, this directory should be a clone of *your personal fork* of the [jm-style-tests](https://github.com/Juris-M/jm-style-tests) repository on GitHub:
 ```bash
     <visit https://github.com/Juris-M/jm-style-tests and fork the repository>
     git clone https://github.com/my-github-name/jm-style-tests.git
 ```
+
+
+
+This allows style maintainers to quickly confirm that changes subsequently made to the style do not have unwanted side effects.
+
+
 
 After cloning your fork of the tests repository, set the path to it in the CTR configuration file, located in the user home directory `~/.cslrun.yaml`:
 ```yaml

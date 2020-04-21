@@ -23,6 +23,11 @@ const errors = require("./lib/errors.js");
 const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 const { styleCapabilities } = require("./lib/style-capabilities");
 
+const groupIdMap = {
+    final: 2319948,
+    draft: 2339078
+}
+
 var ksTimeout;
 var cdTimeout;
 var skipNames = {};
@@ -644,7 +649,18 @@ async function bundleValidateTest() {
         if (options.list) {
             setGroupList();
         }
-        
+        // -i and -s cannot be used together
+        if (options.items && options.submissions) {
+            errors.setupGuidance("The -i and -s options cannot be used together");
+        }
+        if (!options.items && !options.submissions) {
+            options.items = true;
+        }
+        if (options.final) {
+            config.groupID = groupIdMap.final;
+        } else if (options.draft) {
+            config.groupID = groupIdMap.draft;
+        }
         // If we are using -w and -S is not set, sniff out the style name and set it on
         // options, so legacy code will do its thing.
         if (options.watch && !options.style) {
