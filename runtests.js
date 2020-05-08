@@ -36,7 +36,9 @@ var TRAVIS = process.env.TRAVIS;
 /*
  * Console
  */
-process.stdin.setRawMode(true);
+if (process.stdin.setRawMode) {
+  process.stdin.setRawMode(true);
+}
 process.stdin.resume();
 // The console needs to run in binary mode, to give the fancy reporters
 // control over the terminal
