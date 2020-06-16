@@ -600,9 +600,7 @@ async function bundleValidateTest() {
         buildTests();
         if (options.novalidation) {
             await runFixturesAsync();
-        } else if (options.validationonly) {
-            //
-        } else {
+        } else if (!options.validationonly) {
             await runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
         }
         if (options.once || options.validationonly) {
@@ -616,7 +614,11 @@ async function bundleValidateTest() {
                 Bundle();
                 fetchTestData();
                 buildTests();
-                runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
+                if (options.novalidation) {
+                    runFixturesAsync();
+                } else {
+                    runValidationsAsync().catch(err => errors.errorHandlerNonFatal(err));
+                }
             }
         });
         for (var pth of options.watch.slice(1)) {
