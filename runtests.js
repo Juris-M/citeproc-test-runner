@@ -590,7 +590,7 @@ function buildTests() {
 async function bundleValidateTest() {
     // Bundle, load, and run tests if -s, -g, or -a
     // Bundle the processor code.
-    if (options.watch) {
+    if (options.watch && !options.once) {
         clear();
     }
     Bundle();
