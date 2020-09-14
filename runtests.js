@@ -525,7 +525,14 @@ function runFixturesAsync() {
                                 var result = sys.run();
                                 var input = JSON.stringify(test.INPUT, null, 2);
                                 var txt = fs.readFileSync(path.join(config.path.scriptdir, "lib", "templateTXT.txt")).toString();
-                                txt = txt.replace("%%MODE%%", test.MODE);
+                                
+                                var mode = [test.MODE];
+                                for (var submode in test.submode) {
+                                    mode.push(submode);
+                                }
+                                mode = mode.join("-");
+                                
+                                txt = txt.replace("%%MODE%%", mode);
                                 txt = txt.replace("%%KEYS%%", JSON.stringify(test.KEYS, null, 2));
                                 txt = txt.replace("%%DESCRIPTION%%", test.DESCRIPTION);
                                 txt = txt.replace("%%INPUT%%", input);
