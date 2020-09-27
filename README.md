@@ -30,7 +30,7 @@ Tests are written into and run from a local *style tests directory*. To facilita
 
 
 This allows style maintainers to quickly confirm that changes subsequently made to the style do not have unwanted side effects.
-
+§
 
 After cloning your fork of the tests repository, set the path to it in the CTR configuration file, located in the user home directory `~/.cslrun.yaml`:
 ```yaml
