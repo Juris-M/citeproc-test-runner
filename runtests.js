@@ -22,6 +22,7 @@ const usage = require("./lib/options.js").usage;
 const errors = require("./lib/errors.js");
 const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 const { styleCapabilities } = require("./lib/style-capabilities");
+const {version} = require("./package.json");
 
 const groupIdMap = {
     final: 2319948,
@@ -107,6 +108,10 @@ function Stripper(fn, noStrip) {
 function checkSanity() {
     if (options.h) {
         console.log(usage);
+        process.exit();
+    }
+    if (options.version) {
+        console.log(`cslrun version: ${version}`);
         process.exit();
     }
     if (TRAVIS) {
