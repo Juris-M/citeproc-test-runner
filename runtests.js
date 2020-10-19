@@ -24,6 +24,7 @@ const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 const { styleCapabilities } = require("./lib/style-capabilities");
 const {version} = require("./package.json");
 
+
 const groupIdMap = {
     final: 2319948,
     draft: 2339078
@@ -124,10 +125,13 @@ function checkSanity() {
             throw new Error("Running in styleMode. The -w option is required. Add -h for help.");
         }
     }
+    if ("undefined" !== typeof options.V && !options.V) {
+        throw new Error("Must provide a country ID or \"all\" as argument to -V option.");
+    }
     if (options.C) {
         throw new Error("The -C option has been discontinued. See cslrun --help for details.");
     }
-    if (!options.U) {
+    if (!options.U && "undefined" === typeof options.V) {
         if (["s", "g", "a", "l"].filter(o => options[o]).length > 1) {
             throw new Error("Only one of -s, -g, -a, or -l may be invoked.");
         }
@@ -364,6 +368,7 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
             reject(data.toString());
         });
         jing.stdout.on('data', (data) => {
+            process.stdout.write("\n");
             buf.push(data);
         });
         jing.on('close', async function(code) {
@@ -380,7 +385,9 @@ function runJingAsync(validationCount, validationGoal, schema, test) {
                 }
                 resolve();
             } else if (code == 0) {
-                process.stdout.write("+");
+                if (!options.validate || options.validate === "all") {
+                    process.stdout.write("+");
+                }
                 if (validationCount === validationGoal) {
                     console.log("\nDone.");
                     process.exit(0);
@@ -457,6 +464,7 @@ async function runValidationsAsync() {
             throw new Error("Version not found in CSL for fixture: " + key);
         }
         await runJingAsync(validationCount, validationGoal, schema, test);
+        process.stdout.write("+");
         validationCount++;
         if (options.watch) {
             // If in watch mode, all validations will be of the
@@ -654,6 +662,46 @@ async function bundleValidateTest() {
 (async function() {
     try {
         checkSanity();
+        if ("undefined" !== typeof options.validate) {
+            var filenames = null;
+            if (options.validate === "all") {
+                filenames = fs.readdirSync(config.path.modules).filter(o => o.match(/\.csl$/) ? o : false);
+            } else {
+                var m = options.validate.match(/^juris-([^-]+)(?:-[^.]+)*\.csl$/);
+                if (m) {
+                    var rex = new RegExp(options.validate.replace(/\./g, "\\."));
+                } else {
+                    var country = options.validate;
+                    var rex = new RegExp(`^juris-${country}.*\.csl$`);
+                }
+                filenames = fs.readdirSync(config.path.modules).filter(o => o.match(rex) ? o : false);
+            }
+            if (filenames.length === 0) {
+                console.log(`Oops: nothing found for ${options.validate}`);
+                process.exit();
+            }
+            if (filenames) {
+                var goal = filenames.length;
+                var count = 0;
+                console.log(`Validating modules in ${config.path.modules}`);
+                for (var fn of filenames) {
+                    if (options.validate !== "all") {
+                        console.log(fn);
+                    }
+                    var filePath = path.join(config.path.modules, fn);
+                    var csl = fs.readFileSync(filePath).toString();
+                    if (csl.match(/^<\?.*\?>/)) {
+                        csl = csl.split("\n").slice(1).join("\n");
+                    }
+                    // console.log(csl)
+                    var res = await runJingAsync(count, goal, config.path.cslmschema, {CSL:csl, NAME:fn});
+                    count++;
+                }
+                process.exit();
+            }
+            console.log("MISSED");
+            process.exit();
+        }
         if (options.watch) {
             setWatchFiles(options);
             if (options.A) {
