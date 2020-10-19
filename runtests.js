@@ -125,13 +125,10 @@ function checkSanity() {
             throw new Error("Running in styleMode. The -w option is required. Add -h for help.");
         }
     }
-    if ("undefined" !== typeof options.V && !options.V) {
-        throw new Error("Must provide a country ID or \"all\" as argument to -V option.");
-    }
     if (options.C) {
         throw new Error("The -C option has been discontinued. See cslrun --help for details.");
     }
-    if (!options.U && "undefined" === typeof options.V) {
+    if (!options.U && !options.V) {
         if (["s", "g", "a", "l"].filter(o => options[o]).length > 1) {
             throw new Error("Only one of -s, -g, -a, or -l may be invoked.");
         }
@@ -662,7 +659,7 @@ async function bundleValidateTest() {
 (async function() {
     try {
         checkSanity();
-        if ("undefined" !== typeof options.validate) {
+        if (options.validate) {
             var filenames = null;
             if (options.validate === "all") {
                 filenames = fs.readdirSync(config.path.modules).filter(o => o.match(/\.csl$/) ? o : false);
