@@ -41,6 +41,7 @@ path:
   std: false
   src: false
   locale: false
+  abbrevs: false
   modules: false
   cslschema: false
   cslmschema: false
