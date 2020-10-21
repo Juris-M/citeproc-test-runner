@@ -739,6 +739,8 @@ async function bundleValidateTest() {
             // Contact server, analyze return, check current fixtures,
             // update with any missing fixtures. Big one.
             // (1) Get collections from API
+            console.log(config.groupID)
+            // Need to page if more than 100 items
             var json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/top");
             var obj = JSON.parse(json.buf.toString());
             var collectionKey = obj.filter(o => (o.data.name === options.S))
@@ -747,8 +749,19 @@ async function bundleValidateTest() {
                 errors.setupGuidance("No collection found for style \"" + options.S + "\" in library of test items.");
             }
             collectionKey = collectionKey[0];
-            json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/" + collectionKey + "/items/top");
-            obj = JSON.parse(json.buf.toString());
+            var obj = [];
+            var url = "https://api.zotero.org/groups/" + config.groupID + "/collections/" + collectionKey + "/items/top?limit=100";
+            while (url) {
+                json = await fetchURL(url);
+                obj = obj.concat(JSON.parse(json.buf.toString()));
+                // console.log(json.res.responseHeaders.link);
+                var m = json.res.responseHeaders.link.match(/<(https:\/\/[^>]+)>;\s+rel=\"next\"/);
+                if (m) {
+                    url = m[1];
+                } else {
+                    url = false;
+                }
+            }
             // Need to read off the keys of the existing tests before building the data array.
             // Can get the highest test number, or the holes in existing numbers, while we're at it.
             var styleTestDir = path.join(config.path.styletests, options.S);
