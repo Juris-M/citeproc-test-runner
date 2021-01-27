@@ -560,14 +560,16 @@ function runFixturesAsync() {
                                 }
                                 
                                 fs.writeFileSync(path.join(config.path.styletests, options.S, fn + ".txt"), txt);
+                                // XXXZ Arg forces removal of this fixture
                                 // Should this be promisified?
-                                bundleValidateTest().catch(err => errors.errorHandler(err));
+                                bundleValidateTest(fn).catch(err => errors.errorHandler(err));
                                 resolve();
                             }
                             if (key == "n" || key == "N") {
                                 skipNames[test.NAME] = true;
+                                // XXXZ Arg forces removal of this fixture
                                 // Should this be promisified?
-                                bundleValidateTest().catch(err => errors.errorHandler(err));
+                                bundleValidateTest(fn).catch(err => errors.errorHandler(err));
                                 resolve();
                             }
                         }
@@ -604,7 +606,14 @@ function buildTests() {
     fs.writeFileSync(path.join(config.path.fixturedir, "fixtures.js"), fixtures);
 }
 
-async function bundleValidateTest() {
+async function bundleValidateTest(continueAfter) {
+    // Remove test if continuing
+    if (continueAfter) {
+        for (var key of Object.keys(config.testData)) {
+            delete config.testData[key];
+            if (key === continueAfter) break;
+        }
+    }
     // Bundle, load, and run tests if -s, -g, or -a
     // Bundle the processor code.
     if (options.watch && !options.once) {
@@ -613,7 +622,9 @@ async function bundleValidateTest() {
     Bundle();
     // Build and run tests
     if (options.watch) {
-        fetchTestData();
+        if (!continueAfter) {
+            fetchTestData();
+        }
         buildTests();
         if (options.novalidation) {
             await runFixturesAsync();
