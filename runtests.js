@@ -24,16 +24,15 @@ const Sys = require(path.join(config.path.scriptdir, "lib", "sys.js"));
 const { styleCapabilities } = require("./lib/style-capabilities");
 const {version} = require("./package.json");
 
+var ksTimeout;
+var cdTimeout;
+var skipNames = {};
+var TRAVIS = process.env.TRAVIS;
 
 const groupIdMap = {
     final: 2319948,
     draft: 2339078
 }
-
-var ksTimeout;
-var cdTimeout;
-var skipNames = {};
-var TRAVIS = process.env.TRAVIS;
 
 /*
  * Console
@@ -139,6 +138,13 @@ function checkSanity() {
     }
     if (options.U && !options.watch) {
         throw new Error("The -U option requires -w.");
+    }
+    if (options.U) {
+        if (["final", "draft"].indexOf(options.U) === -1) {
+            if (!options.U.toString().match(/^[0-9]+$/)) {
+                throw new Error("Option 'update' [U] must be 'final', 'draft' or a valid Zotero group ID");
+            }
+        }
     }
     if (options.k && !options.watch) {
         throw new Error("The -k option requires -w.");
@@ -728,10 +734,12 @@ async function bundleValidateTest(continueAfter) {
         if (!options.items && !options.submissions) {
             options.items = true;
         }
-        if (options.final) {
+        if (options.U === "final") {
             config.groupID = groupIdMap.final;
-        } else if (options.draft) {
+        } else if (options.U === "draft") {
             config.groupID = groupIdMap.draft;
+        } else if (options.U) {
+            config.groupID = options.U;
         }
         // If we are using -w and -S is not set, sniff out the style name and set it on
         // options, so legacy code will do its thing.
@@ -752,7 +760,7 @@ async function bundleValidateTest(continueAfter) {
             // (1) Get collections from API
             console.log(config.groupID)
             // Need to page if more than 100 items
-            var json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/top");
+            var json = await fetchURL("https://api.zotero.org/groups/" + config.groupID + "/collections/top?limit=100");
             var obj = JSON.parse(json.buf.toString());
             var collectionKey = obj.filter(o => (o.data.name === options.S))
                 .map(o => o.data.key);
@@ -808,6 +816,7 @@ async function bundleValidateTest(continueAfter) {
             }
             newNums.reverse();
             var arr = [];
+
             for (var o of obj) {
                 var key = o.data.key;
                 if (doneKeys[key]) {
