@@ -29,7 +29,7 @@
         "install": "^0.12.2",
         "normalize-newline": "^3.0.0",
         "tmp": "0.0.33",
-        "yaml": "^1.10.2",
+        "yaml": "^2.2.2",
         "zotero-to-csl": ">=1.2.0",
         "zotero2jurismcsl": "0.0.12"
     },
